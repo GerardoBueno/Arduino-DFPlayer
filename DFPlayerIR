@@ -1,0 +1,143 @@
+#include <Arduino.h>
+#include <SoftwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
+
+char serialData;
+int nsong;
+int v;
+int PIR = 2;      // señal de PIR a pin 2
+int BUSY = 4;
+int ESTADOBUSY = 0;
+int SON = 13;     // IN de rele a pin 13
+int ESTADO = 0; // almacena estado de señal
+int ESTADOSON = 0;
+int cont; 
+SoftwareSerial comm(10,11);
+ DFRobotDFPlayerMini mp3;
+String DFPlayerStatus(uint8_t type, int value){
+  String error;
+  switch (type) {
+    case TimeOut:
+      error = "Time Out!";
+      break;
+    case WrongStack:
+      error = "Stack Wrong!";
+      break;
+    case DFPlayerCardInserted:
+      error = "Card Inserted!";
+      break;
+    case DFPlayerCardRemoved:
+      error = "Card Removed!";
+      break;
+    case DFPlayerCardOnline:
+      error = "Card Online!";
+      break;
+    case DFPlayerPlayFinished:
+      error = "Number:";
+      error += value;
+      error += " Play Finished!";
+      break;
+    case DFPlayerError:
+      //Serial.print("DFPlayerError:");
+      switch (value) {
+        case Busy:
+          error = "Card not found";
+          break;
+        case Sleeping:
+          error = "Sleeping";
+          break;
+        case SerialWrongStack:
+          error = "Get Wrong Stack";
+          break;
+        case CheckSumNotMatch:
+          error = "Check Sum Not Match";
+          break;
+        case FileIndexOut:
+          error = "File Index Out of Bound";
+          break;
+        case FileMismatch:
+          error = "Cannot Find File";
+          break;
+        case Advertise:
+          error = "In Advertise";
+          break;
+        default:
+          error = "DFPlayerError: Unknown";
+          break;
+      }
+      break;
+    default:
+      break;
+  }
+  return error;
+} 
+void setup() {
+  Serial.begin(9600);
+  comm.begin(9600);
+  mp3.begin(comm);
+  serialData = (char)((' '));
+  pinMode(PIR, INPUT);    // pin 2 como entrada
+  pinMode(BUSY,INPUT);    // pin 4 modulo esta sonando
+  pinMode(SON, OUTPUT);  // pin 13 como salida
+  delay(20000);     // demora para estabilizar el sensor
+  Serial.println("OK");
+}
+ 
+void loop() {
+  ESTADO = digitalRead(PIR);  // lectura de estado de señal
+  ESTADOSON = 0;
+  ESTADOBUSY = 1;
+  cont = 0;
+    if (ESTADO == HIGH){    // si la señal esta en alto indicando movimiento
+      digitalWrite(SON, HIGH);  // activa el diodo con nivel alto
+      ESTADOSON = digitalRead(SON);    // lectura del estado led  
+      mp3.start();
+      Serial.println("Play Song");
+      delay(1000) ;
+      ESTADOBUSY = digitalRead(BUSY);
+      delay(1000) ;   
+    while (ESTADOBUSY == LOW and ESTADOSON == HIGH){
+     delay (1000) ; //demora de un segundo
+     cont = (cont+1);
+    if (cont == 30){   //segiundos de duracion del play
+     digitalWrite(SON, LOW);
+     ESTADOSON = digitalRead(SON);
+     mp3.pause();
+     Serial.println("Pause");  
+    }
+  }
+ }
+
+  if (mp3.available()) {
+    Serial.println((DFPlayerStatus(mp3.readType(),mp3.read()))); 
+  }
+  
+  
+  if (Serial.available()) {
+    serialData = (Serial.read());
+    if (serialData == ('q')) {
+      Serial.println("Connecting...");
+      if (mp3.begin(comm)) {
+        Serial.println("Success");
+      } 
+      else {
+        Serial.println("Please insert the SD card or check the connection");
+      
+      } 
+
+    } else if (serialData == ('w')) {
+      Serial.println("Play Song");
+      mp3.start();
+    } else if (serialData == ('s')) {
+      Serial.println("Pause");
+      mp3.pause();
+    } else if (serialData == ('d')) {
+      Serial.println("Next Song");
+      mp3.next();
+    } else if (serialData == ('a')) {
+      Serial.println("Previous Song");
+      mp3.previous();
+    }
+ 
+}
+}
